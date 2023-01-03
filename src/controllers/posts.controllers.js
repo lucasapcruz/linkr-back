@@ -1,4 +1,5 @@
 import { connection } from "../database/server.js";
+import { getLinkPreview, getPreviewFromContent } from "link-preview-js";
 
 export async function createPost (req, res) {
   const { link, message } = res.locals.data;
@@ -42,12 +43,21 @@ export async function getPosts (req, res) {
 
   try {
     const queryPosts = await connection.query(`
-      SELECT u.image_url, u.name, p.link, p.message FROM posts AS p
+      SELECT p.id, u.image_url, u.name, p.link, p.message FROM posts AS p
       JOIN users AS u ON p.user_id = u.id
       ORDER BY p.date DESC
       LIMIT 20
     `);
     const posts = queryPosts.rows;
+
+    for (let i = 0; i < posts.length; i++) {
+      const e = posts[i];
+      if (e.link) {
+        const { title, description, url, images } = await getLinkPreview(e.link);
+        e.link = { title, description, url, image: images[0] };
+      }
+    }
+    
     res.send(posts);
   } catch (err) {
     console.log(err.message);
