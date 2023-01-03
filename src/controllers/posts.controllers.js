@@ -53,8 +53,13 @@ export async function getPosts (req, res) {
     for (let i = 0; i < posts.length; i++) {
       const e = posts[i];
       if (e.link) {
-        const { title, description, url, images } = await getLinkPreview(e.link);
-        e.link = { title, description, url, image: images[0] };
+        const { title, description, url, images, favicons } = await getLinkPreview(e.link);
+        e.link = { 
+          title,
+          description,
+          url,
+          image: images.length ? images[0] : favicons[0]
+        };
       }
     }
     
