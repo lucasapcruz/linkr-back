@@ -95,3 +95,24 @@ export async function updatePost (req, res) {
     res.sendStatus(500);
   }
 };
+
+export async function deletePost (req, res) {
+  const { id } = req.params;
+  const { token } = res.locals;
+
+  try {
+    const isPostFromUser = await connection.query(`
+      SELECT p.id FROM posts p
+      JOIN users u ON p.user_id = u.id
+      JOIN sessions s ON u.id = s.user_id
+      WHERE s.token = $1 AND p.id = $2
+    `, [token, id]);
+    if (!isPostFromUser.rowCount) return res.sendStatus(401);
+
+    await connection.query(`DELETE FROM posts WHERE id=$1`, [id])
+    res.sendStatus(204);
+  } catch (err) {
+    console.log(err.message);
+    res.sendStatus(500);
+  }
+};
