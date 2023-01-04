@@ -43,8 +43,16 @@ export async function createPost (req, res) {
 export async function getPosts (req, res) {
 
   try {
+    // Token > User
+    const queryUser = await connection.query(`
+      SELECT u.id FROM users AS u
+      JOIN sessions AS s ON u.id = s.user_id
+      WHERE s.token = $1
+    `, [res.locals.token]);
+    const userId = queryUser.rows[0].id;
+
     const queryPosts = await connection.query(`
-      SELECT p.id, u.image_url, u.name, p.link, p.message FROM posts AS p
+      SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message FROM posts AS p
       JOIN users AS u ON p.user_id = u.id
       ORDER BY p.date DESC
       LIMIT 20
@@ -53,6 +61,8 @@ export async function getPosts (req, res) {
 
     for (let i = 0; i < posts.length; i++) {
       const e = posts[i];
+      e.owner = (e.user_id === userId);
+      delete e.user_id;
       if (e.link) {
         const { title, description, url, images, favicons } = await getLinkPreview(e.link);
         e.link = { 
@@ -65,6 +75,21 @@ export async function getPosts (req, res) {
     }
     
     res.send(posts);
+  } catch (err) {
+    console.log(err.message);
+    res.sendStatus(500);
+  }
+};
+
+export async function updatePost (req, res) {
+  const { message, id } = req.body;
+  
+  try {
+    await connection.query(`
+      UPDATE posts SET message=$1 WHERE id=$2
+    `, [message, id]);
+
+    res.sendStatus(200);
   } catch (err) {
     console.log(err.message);
     res.sendStatus(500);
