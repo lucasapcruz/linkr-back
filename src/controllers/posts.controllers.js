@@ -1,14 +1,9 @@
 import { connection } from "../database/server.js";
-import { getLinkPreview, getPreviewFromContent } from "link-preview-js";
+import { getLinkPreview } from "link-preview-js";
 
 export async function createPost (req, res) {
   const { link, message } = res.locals.data;
 
-  // Filter Hashtags
-  const words = message.split(" ");
-  const hashtags = words.filter(word => word[0] === "#")
-  .map(word => word.replace("#", ""));
-  
   try {
     // Token > User
     const queryUser = await connection.query(`
@@ -21,15 +16,21 @@ export async function createPost (req, res) {
     // Post
     const queryPost = await connection.query(`
       INSERT INTO posts (user_id, link, message) VALUES ($1, $2, $3) RETURNING id`
-    , [userId, link ? link : "", message]);
+    , [userId, link, message || ""]);
     
     // Hashtags
-    const postId = queryPost.rows[0].id;
-    for (let i = 0; i < hashtags.length; i++) {
-      const name = hashtags[i];
-      await connection.query(`
-        INSERT INTO hashtags (name, post_id) VALUES ($1, $2)`
-      , [name, postId]);
+    if (message) {
+      const words = message.split(" ");
+      const hashtags = words.filter(word => word[0] === "#")
+      .map(word => word.replace("#", ""));
+
+      const postId = queryPost.rows[0].id;
+      for (let i = 0; i < hashtags.length; i++) {
+        const name = hashtags[i];
+        await connection.query(`
+          INSERT INTO hashtags (name, post_id) VALUES ($1, $2)`
+        , [name, postId]);
+      }
     }
 
     res.sendStatus(201);
