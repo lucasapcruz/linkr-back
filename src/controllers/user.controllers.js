@@ -53,34 +53,41 @@ export async function Signin(req, res) {
 
 export async function find(req, res) {
   const { id } = req.params;
-  const { name } = req.query;
 
   try {
-    let user;
-
-    if (id) {
-      user = await connection.query(
-        `
+    let user = await connection.query(
+      `
         SELECT id, name, image_url AS "imageUrl"
         FROM users
         WHERE users.id=$1
     `,
-        [id]
-      );
-    } else if (name) {
-      user = await connection.query(
-        `
+      [id]
+    );
+
+    res.send(user.rows[0]);
+  } catch (error) {
+    console.log(error);
+    res.sendStatus(500);
+  }
+}
+
+export async function findAll(req, res) {
+  const { name } = req.query;
+
+  try {
+    const user = await connection.query(
+      `
         SELECT id, name, image_url AS "imageUrl"
         FROM users
         WHERE LOWER(name) LIKE $1
     `,
-        [`${name}%`]
-      );
-      if (!user.rowCount)
-        return res.status(404).send({ message: "Nenhum usuário encontrado" });
-    } else return res.sendStatus(400);
+      [`${name}%`]
+    );
 
-    res.send(user.rows[0]);
+    if (!user.rowCount)
+      return res.status(404).send({ message: "Nenhum usuário encontrado" });
+
+    res.send(user.rows);
   } catch (error) {
     console.log(error);
     res.sendStatus(500);
