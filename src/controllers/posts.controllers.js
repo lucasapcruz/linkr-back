@@ -169,4 +169,16 @@ export async function likePost(req, res) {
       [postId, userId]
     );
   }
+
+  return res.sendStatus(201);
 };
+
+export async function getPostLikes(req, res) {
+  const queryLikes = await connection.query(
+    `SELECT post_id, user_id FROM likes;`,
+  );
+
+  const likes = queryLikes.rows;
+
+  return res.status(200).send(likes);
+}
