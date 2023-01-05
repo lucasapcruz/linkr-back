@@ -133,3 +133,40 @@ export async function deletePost(req, res) {
     res.sendStatus(500);
   }
 };
+
+export async function likePost(req, res) {
+  const { postId } = req.body;
+
+  const queryUser = await connection.query(
+    `SELECT u.id 
+    FROM users AS u 
+    JOIN sessions AS s 
+    ON u.id = s.user_id 
+    WHERE s.token = $1`,
+    [res.locals.token]
+  );
+
+  const userId = queryUser.rows[0].id;
+
+  const queryLikes = await connection.query(
+    `SELECT *
+    FROM likes
+    WHERE user_id=$1 AND post_id=$2;`,
+    [userId, postId]
+  );
+
+  if (queryLikes.rows.length > 0) {
+    console.log(userId);
+    await connection.query(
+      `DELETE FROM likes
+      WHERE user_id=$1 AND post_id=$2;`,
+      [userId, postId]
+    );
+  } else {
+    await connection.query(
+      `INSERT INTO likes (post_id, user_id)
+      VALUES ($1, $2);`,
+      [postId, userId]
+    );
+  }
+};
