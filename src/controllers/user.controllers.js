@@ -55,7 +55,7 @@ export async function find(req, res) {
   const { id } = req.params;
 
   try {
-    const user = await connection.query(
+    let user = await connection.query(
       `
         SELECT id, name, image_url AS "imageUrl"
         FROM users
@@ -65,6 +65,29 @@ export async function find(req, res) {
     );
 
     res.send(user.rows[0]);
+  } catch (error) {
+    console.log(error);
+    res.sendStatus(500);
+  }
+}
+
+export async function findAll(req, res) {
+  const { name } = req.query;
+
+  try {
+    const user = await connection.query(
+      `
+        SELECT id, name, image_url AS "imageUrl"
+        FROM users
+        WHERE LOWER(name) LIKE $1
+    `,
+      [`${name}%`]
+    );
+
+    if (!user.rowCount)
+      return res.status(404).send({ message: "Nenhum usuário encontrado" });
+
+    res.send(user.rows);
   } catch (error) {
     console.log(error);
     res.sendStatus(500);
