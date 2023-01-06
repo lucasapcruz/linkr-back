@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   find,
   findAll,
+  findMe,
   Signin,
   Signup,
 } from "../controllers/user.controllers.js";
@@ -14,6 +15,7 @@ const router = Router();
 
 router.post("/sign-up", validateSchema(userSchema), Signup);
 router.post("/sign-in", validateSchema(loginSchema), Signin);
+router.get("/user/me", tokenValidation, findMe);
 router.get("/user/:id", tokenValidation, find);
 router.get("/user", tokenValidation, findAll);
 

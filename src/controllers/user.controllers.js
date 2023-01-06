@@ -93,3 +93,23 @@ export async function findAll(req, res) {
     res.sendStatus(500);
   }
 }
+
+export async function findMe(req, res) {
+  const { token } = res.locals;
+  try {
+    const user = await connection.query(
+      `
+        SELECT u.name, u.image_url AS "imageUrl"
+        FROM sessions s
+        JOIN users u
+        ON s.user_id = u.id
+        WHERE s.token = $1;
+    `,
+      [token]
+    );
+    res.send(user.rows[0]);
+  } catch (error) {
+    console.log(error);
+    res.sendStatus(500);
+  }
+}
