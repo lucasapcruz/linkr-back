@@ -52,8 +52,6 @@ export async function getPosts(req, res) {
   const { hashtag } = req.query;
   const { id } = req.params;
 
-  console.log(req.params);
-
   try {
     // Token > User
     const queryUser = await connection.query(
@@ -156,6 +154,8 @@ export async function deletePost(req, res) {
     );
     if (!isPostFromUser.rowCount) return res.sendStatus(401);
 
+    await connection.query(`DELETE FROM hashtags WHERE post_id=$1`, [id]);
+    await connection.query(`DELETE FROM likes WHERE post_id=$1`, [id]);
     await connection.query(`DELETE FROM posts WHERE id=$1`, [id]);
     res.sendStatus(204);
   } catch (err) {
@@ -186,7 +186,6 @@ export async function likePost(req, res) {
   );
 
   if (queryLikes.rows.length > 0) {
-    console.log(userId);
     await connection.query(
       `DELETE FROM likes
       WHERE user_id=$1 AND post_id=$2;`,

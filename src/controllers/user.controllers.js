@@ -34,6 +34,7 @@ export async function Signin(req, res) {
       email,
     ]);
     if (query.rowCount === 0) return res.sendStatus(401);
+    const user = query.rows[0];
 
     const hashPassword = bcrypt.compareSync(password, query.rows[0].password);
     if (!hashPassword) return res.sendStatus(401);
@@ -41,10 +42,14 @@ export async function Signin(req, res) {
     const newToken = createToken();
     await connection.query(
       `INSERT INTO sessions ("user_id", token) VALUES ($1, $2);`,
-      [query.rows[0].id, newToken]
+      [user.id, newToken]
     );
 
-    res.send({ token: newToken });
+    res.send({ 
+      token: newToken,
+      name: user.name,
+      pictureUrl: user.image_url
+    });
   } catch (error) {
     console.log(error);
     res.sendStatus(500);
@@ -93,3 +98,26 @@ export async function findAll(req, res) {
     res.sendStatus(500);
   }
 }
+export async function deleteUser (req, res) {
+  const { token } = res.locals;
+  
+  try {
+    // Token > User
+    const queryUser = await connection.query(
+      `
+      SELECT u.id FROM users AS u
+      JOIN sessions AS s ON u.id = s.user_id
+      WHERE s.token = $1
+    `,
+      [token]
+    );
+    const userId = queryUser.rows[0].id;
+
+    await connection.query(`DELETE FROM sessions WHERE user_id=$1`, [userId]);
+    res.sendStatus(200);
+
+  } catch (err) {
+    console.log(err.message);
+    res.sendStatus(500);
+  }
+};
