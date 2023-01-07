@@ -63,47 +63,42 @@ export async function getPosts(req, res) {
       [res.locals.token]
     );
     const userId = queryUser.rows[0].id;
-
+    
     let queryPosts;
     if (id) {
       queryPosts = await connection.query(`
       SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message FROM posts AS p
       JOIN users AS u ON p.user_id = u.id
-      WHERE p.user_id = u.id
+      WHERE p.user_id = $1
       ORDER BY p.date DESC
-    `);
+      `, [id]);
     } else if (!hashtag) {
       queryPosts = await connection.query(`
       SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message FROM posts AS p
       JOIN users AS u ON p.user_id = u.id
       ORDER BY p.date DESC
       LIMIT 20
-    `);
+      `);
     } else {
-      queryPosts = await connection.query(
-        `
-      SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message
-      FROM posts AS p
-      JOIN users AS u ON p.user_id = u.id
-      WHERE p.id IN (
-	      SELECT h.post_id 
-        FROM hashtags h
-        WHERE h."name" = $1)
-      ORDER BY p.date DESC
-      LIMIT 20
-    `,
-        [hashtag]
-      );
+      queryPosts = await connection.query(`
+        SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message
+        FROM posts AS p
+        JOIN users AS u ON p.user_id = u.id
+        WHERE p.id IN (
+          SELECT h.post_id 
+          FROM hashtags h
+          WHERE h."name" = $1)
+        ORDER BY p.date DESC
+        LIMIT 20
+      `, [hashtag]);
     }
     const posts = queryPosts.rows;
 
     for (let i = 0; i < posts.length; i++) {
       const e = posts[i];
       e.owner = e.user_id === userId;
-      delete e.user_id;
       if (e.link) {
-        const { title, description, url, images, favicons } =
-          await getLinkPreview(e.link);
+        const { title, description, url, images, favicons } = await getLinkPreview(e.link);
         e.link = {
           title,
           description,
