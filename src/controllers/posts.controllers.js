@@ -175,10 +175,14 @@ export async function likePost(req, res) {
 
 export async function getPostLikes(req, res) {
   const queryLikes = await connection.query(
-    `SELECT post_id, user_id FROM likes;`,
+    `SELECT posts.id AS "postId",
+    json_agg(users.name) AS "usersWhoLiked"
+    FROM likes 
+    JOIN posts ON likes.post_id = posts.id
+    JOIN users ON likes.user_id = users.id 
+    GROUP BY posts.id
+    ORDER BY posts.id ASC;`
   );
 
-  const likes = queryLikes.rows;
-
-  return res.status(200).send(likes);
+  res.status(200).send(queryLikes.rows);
 }
