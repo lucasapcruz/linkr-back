@@ -124,12 +124,25 @@ export async function updatePost(req, res) {
   const { message, id } = req.body;
 
   try {
-    await connection.query(
-      `
+    // Delete old hashtags
+    await connection.query(`DELETE FROM hashtags WHERE post_id=$1`, [id]);
+
+    // Insert new hashtags
+    const words = message.split(" ");
+    const hashtags = words
+    .filter((word) => word[0] === "#")
+    .map((word) => word.replace("#", ""));
+    for (let i = 0; i < hashtags.length; i++) {
+      const name = hashtags[i];
+      await connection.query(`
+        INSERT INTO hashtags (name, post_id) VALUES ($1, $2)
+      `, [name, id]);
+    }
+
+    // Update post message
+    await connection.query(`
       UPDATE posts SET message=$1 WHERE id=$2
-    `,
-      [message, id]
-    );
+    `, [message, id]);
 
     res.sendStatus(200);
   } catch (err) {
