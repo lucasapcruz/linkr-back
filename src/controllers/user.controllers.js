@@ -98,6 +98,7 @@ export async function findAll(req, res) {
     res.sendStatus(500);
   }
 }
+
 export async function deleteUser (req, res) {
   const { token } = res.locals;
   
