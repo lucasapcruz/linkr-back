@@ -8,6 +8,7 @@ const router = Router();
 
 router.post("/posts", tokenValidation, validateSchema(postSchema), createPost);
 router.get("/posts", tokenValidation, getPosts);
+router.get("/posts/user/:id", tokenValidation, getPosts);
 router.patch("/posts", tokenValidation, updatePost);
 router.delete("/posts/:id", tokenValidation, deletePost);
 router.post("/likes", tokenValidation, likePost);
