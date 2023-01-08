@@ -206,4 +206,19 @@ export async function likePost(req, res) {
       [postId, userId]
     );
   }
+  return res.sendStatus(201);
+};
+
+export async function getPostLikes(req, res) {
+  const queryLikes = await connection.query(
+    `SELECT posts.id AS "postId",
+    json_agg(users.name) AS "usersWhoLiked"
+    FROM likes 
+    JOIN posts ON likes.post_id = posts.id
+    JOIN users ON likes.user_id = users.id 
+    GROUP BY posts.id
+    ORDER BY posts.id ASC;`
+  );
+
+  res.status(200).send(queryLikes.rows);
 }
