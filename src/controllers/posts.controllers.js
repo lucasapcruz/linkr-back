@@ -75,7 +75,7 @@ export async function getPosts(req, res) {
     `, [hashtag]);
     }
     const posts = queryPosts.rows;
-
+    
     for (let i = 0; i < posts.length; i++) {
       const e = posts[i];
       e.owner = (e.user_id === userId);
@@ -91,10 +91,10 @@ export async function getPosts(req, res) {
       }
     }
 
-    res.send(posts);
+    return res.send(posts);
   } catch (err) {
     console.log(err.message);
-    res.sendStatus(500);
+    return res.sendStatus(500);
   }
 };
 
@@ -156,7 +156,6 @@ export async function likePost(req, res) {
   );
 
   if (queryLikes.rows.length > 0) {
-    console.log(userId);
     await connection.query(
       `DELETE FROM likes
       WHERE user_id=$1 AND post_id=$2;`,
@@ -174,15 +173,30 @@ export async function likePost(req, res) {
 };
 
 export async function getPostLikes(req, res) {
+  const queryUser = await connection.query(
+    `SELECT u.id 
+    FROM users AS u 
+    JOIN sessions AS s 
+    ON u.id = s.user_id 
+    WHERE s.token = $1`,
+    [res.locals.token]
+  );
+
+  const userId = queryUser.rows[0].id;
+
   const queryLikes = await connection.query(
     `SELECT posts.id AS "postId",
-    json_agg(users.name) AS "usersWhoLiked"
+    COUNT(likes.*) AS "totalLikes",
+    json_agg(users.name) AS "usersWhoLiked",
+    json_agg(users.id) AS "usersId"
     FROM likes 
     JOIN posts ON likes.post_id = posts.id
     JOIN users ON likes.user_id = users.id 
     GROUP BY posts.id
     ORDER BY posts.id ASC;`
   );
+
+  queryLikes.rows.push({userId: userId});
 
   res.status(200).send(queryLikes.rows);
 }

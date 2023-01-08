@@ -11,6 +11,6 @@ router.get("/posts", tokenValidation, getPosts);
 router.patch("/posts", tokenValidation, updatePost);
 router.delete("/posts/:id", tokenValidation, deletePost);
 router.post("/likes", tokenValidation, likePost);
-router.get("/likes", getPostLikes);
+router.get("/likes", tokenValidation, getPostLikes);
 
 export default router;
