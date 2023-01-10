@@ -49,40 +49,60 @@ export async function createPost(req, res) {
 }
 
 export async function getPosts(req, res) {
+  const { token } = res.locals;
   const { hashtag } = req.query;
   const { id } = req.params;
 
   try {
     // Token > User
-    const queryUser = await connection.query(
-      `
+    const queryUser = await connection.query(`
       SELECT u.id FROM users AS u
       JOIN sessions AS s ON u.id = s.user_id
       WHERE s.token = $1
-    `,
-      [res.locals.token]
-    );
+    `, [token]);
     const userId = queryUser.rows[0].id;
     
+    let data = {};
     let queryPosts;
+
     if (id) {
       queryPosts = await connection.query(`
-      SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message FROM posts AS p
-      JOIN users AS u ON p.user_id = u.id
-      WHERE p.user_id = $1
-      ORDER BY p.date DESC
+        SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message FROM posts AS p
+        JOIN users AS u ON p.user_id = u.id
+        WHERE p.user_id = $1
+        ORDER BY p.date DESC
       `, [id]);
+
+      const queryFollowing = await connection.query(`
+        SELECT * FROM followings WHERE user_id = $1 AND following_id = $2
+      `, [userId, id]);
+      data.following = (queryFollowing.rowCount ? true : false);
+
+      const queryName = await connection.query("SELECT name FROM users WHERE id = $1", [id]);
+      data.name = queryName.rows[0].name;
+
     } else if (!hashtag) {
-      queryPosts = await connection.query(`
-      SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message FROM posts AS p
-      JOIN users AS u ON p.user_id = u.id
-      ORDER BY p.date DESC
-      LIMIT 20
-      `);
-    } else {
       queryPosts = await connection.query(`
         SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message
         FROM posts AS p
+        JOIN users AS u ON p.user_id = u.id
+        WHERE u.id IN (
+          SELECT following_id
+          FROM followings
+          WHERE user_id = $1
+        )
+        ORDER BY p.date DESC
+        LIMIT 20
+      `, [userId]);
+
+      const followQuery = await connection.query(`
+        SELECT * FROM followings WHERE user_id = $1
+      `, [userId]);
+      data.localFollowing = followQuery.rowCount;
+
+    } else {
+      queryPosts = await connection.query(`
+        SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message FROM posts AS p
         JOIN users AS u ON p.user_id = u.id
         WHERE p.id IN (
           SELECT h.post_id 
@@ -96,7 +116,7 @@ export async function getPosts(req, res) {
 
     for (let i = 0; i < posts.length; i++) {
       const e = posts[i];
-      e.owner = e.user_id === userId;
+      e.owner = (e.user_id === userId);
       if (e.link) {
         const { title, description, url, images, favicons } = await getLinkPreview(e.link);
         e.link = {
@@ -108,7 +128,8 @@ export async function getPosts(req, res) {
       }
     }
 
-    res.send(posts);
+    data.posts = posts;
+    res.send(data);
   } catch (err) {
     console.log(err.message);
     res.sendStatus(500);
@@ -183,7 +204,6 @@ export async function likePost(req, res) {
     WHERE s.token = $1`,
     [res.locals.token]
   );
-
   const userId = queryUser.rows[0].id;
 
   const queryLikes = await connection.query(

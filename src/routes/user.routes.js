@@ -3,6 +3,7 @@ import {
   deleteUser,
   find,
   findAll,
+  followUser,
   Signin,
   Signup,
 } from "../controllers/user.controllers.js";
@@ -18,5 +19,6 @@ router.post("/sign-in", validateSchema(loginSchema), Signin);
 router.get("/user/:id", tokenValidation, find);
 router.get("/user", tokenValidation, findAll);
 router.delete("/users", tokenValidation, deleteUser);
+router.post("/follow/:id", tokenValidation, followUser);
 
 export default router;
