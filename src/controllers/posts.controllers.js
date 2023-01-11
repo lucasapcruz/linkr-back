@@ -403,3 +403,39 @@ export async function getPostLikes(req, res) {
 
   res.status(200).send(queryLikes.rows);
 }
+
+export async function postComment(req, res) {
+  const token = res.locals.token;
+  const { postId, message } = res.locals.data;
+
+  try {
+    const query = await connection.query(
+      `
+      SELECT s.user_id
+      FROM sessions AS s
+      WHERE s.token = $1;
+    `,
+      [token]
+    );
+
+    console.log(query);
+
+    const userId = query.rows[0].user_id;
+
+    await connection.query(
+      `
+      INSERT 
+      INTO comments
+        (post_id, user_id, message)
+      VALUES
+        ($1, $2, $3);  
+    `,
+      [postId, userId, message]
+    );
+
+    res.sendStatus(201);
+  } catch (error) {
+    console.log(error.message);
+    res.sendStatus(500);
+  }
+}
