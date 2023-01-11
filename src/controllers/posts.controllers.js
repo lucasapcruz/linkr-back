@@ -49,21 +49,12 @@ export async function createPost(req, res) {
 }
 
 export async function getPosts(req, res) {
-  const { token, userInfo } = res.locals;
+  const { userInfo } = res.locals;
   const { hashtag } = req.query;
   const { id } = req.params;
 
   try {
-    // Token > User
-    const queryUser = await connection.query(
-      `
-      SELECT u.id FROM users AS u
-      JOIN sessions AS s ON u.id = s.user_id
-      WHERE s.token = $1
-    `,
-      [token]
-    );
-    const userId = queryUser.rows[0].id;
+    const userId = userInfo.user_id;
 
     let data = {};
     let queryPosts;
@@ -193,57 +184,57 @@ export async function getPosts(req, res) {
     } else {
       queryPosts = await connection.query(
         `
-            WITH tablejoin AS (
-              SELECT
-              p.id,
-              p.user_id,
-              P.message,
-              p.link,
-                r.user_id AS sharer_id,
-              p.date,
-                r.date AS repost_date,
-              u,name AS sharer_name
-              FROM posts p
-              LEFT JOIN reposts r
-              ON p.id = r.post_id
-              LEFT JOIN users u
-              ON r.user_id = u.id
-            )
-            , 
-            shares AS (
-              SELECT 
-              r.post_id AS shared_id,
-              COUNT(r.post_id) AS share_count
-              FROM posts p
-              JOIN reposts r
-              ON p.id = r.post_id
-              GROUP BY r.post_id
-              )
+        WITH tablejoin AS (
+          SELECT
+          p.id,
+          p.user_id,
+          P.message,
+          p.link,
+            r.user_id AS sharer_id,
+          p.date,
+            r.date AS repost_date,
+          u,name AS sharer_name
+          FROM posts p
+          LEFT JOIN reposts r
+          ON p.id = r.post_id
+          LEFT JOIN users u
+          ON r.user_id = u.id
+        )
+        , 
+        shares AS (
+          SELECT 
+          r.post_id AS shared_id,
+          COUNT(r.post_id) AS share_count
+          FROM posts p
+          JOIN reposts r
+          ON p.id = r.post_id
+          GROUP BY r.post_id
+          )
 
-            SELECT 
-              t.id, t.user_id, u.image_url, u.name, t.message, t.link,
-              json_build_object(
-                'sharerId', t.sharer_id,
-                'shareCount', COALESCE(s.share_count,0),
-                'sharerName', t.sharer_name
-              ) AS "shareInfo",
-              CASE WHEN t.repost_date IS NOT NULL
-                  THEN t.repost_date
-                  ELSE t.date 
-              END AS date,
-              t.user_id = $1 AS "owner"
-            
-            FROM tablejoin t
-            LEFT JOIN shares s
-            ON t.id = s.shared_id
-            JOIN users u
-            ON t.user_id = u.id
-            WHERE t.user_id IN (
-              SELECT following_id FROM followings WHERE user_id = $1)
-            OR t.sharer_id IN (
-              SELECT following_id FROM followings WHERE user_id = $1)
-            ORDER BY date DESC;
-      `,
+        SELECT 
+          t.id, t.user_id, u.image_url, u.name, t.message, t.link,
+          json_build_object(
+            'sharerId', t.sharer_id,
+            'shareCount', COALESCE(s.share_count,0),
+            'sharerName', t.sharer_name
+          ) AS "shareInfo",
+          CASE WHEN t.repost_date IS NOT NULL
+              THEN t.repost_date
+              ELSE t.date 
+          END AS date,
+          t.user_id = $1 AS "owner"
+        
+        FROM tablejoin t
+        LEFT JOIN shares s
+        ON t.id = s.shared_id
+        JOIN users u
+        ON t.user_id = u.id
+        WHERE t.user_id IN (
+          SELECT following_id FROM followings WHERE user_id = $1)
+        OR t.sharer_id IN (
+          SELECT following_id FROM followings WHERE user_id = $1)
+        ORDER BY date DESC;
+  `,
         [userId]
       );
 
