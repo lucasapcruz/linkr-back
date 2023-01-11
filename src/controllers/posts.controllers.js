@@ -71,11 +71,55 @@ export async function getPosts(req, res) {
     if (id) {
       queryPosts = await connection.query(
         `
-        SELECT p.id, u.id AS user_id, u.image_url, u.name, p.link, p.message FROM posts AS p
-        JOIN users AS u ON p.user_id = u.id
-        WHERE p.user_id = $1
-        ORDER BY p.date DESC
-      `,
+          WITH tablejoin AS (
+            SELECT
+              p.id,
+            p.user_id,
+            P.message,
+            p.link,
+              r.user_id AS sharer_id,
+            p.date,
+              r.date AS repost_date,
+            u.name AS sharer_name
+            FROM posts p
+            LEFT JOIN reposts r
+            ON p.id = r.post_id
+            RIGHT JOIN users u 
+			      ON r.user_id = u.id
+            )
+          , 
+          shares AS (
+            SELECT 
+            r.post_id AS shared_id,
+            COUNT(r.post_id) AS share_count
+            FROM posts p
+            JOIN reposts r
+            ON p.id = r.post_id
+            GROUP BY r.post_id
+            )
+
+          SELECT 
+            t.id, t.user_id, u.image_url, u.name, t.message, t.link,
+            json_build_object(
+              'sharerId', CASE WHEN t.user_id = 7
+                  THEN NULL ELSE t.sharer_id END,
+              'sharerName', t.sharer_name,
+              'shareCount', s.share_count
+            ) AS "shareInfo",
+            CASE WHEN t.repost_date IS NOT NULL
+                THEN t.repost_date
+                ELSE t.date 
+            END AS date,
+            t.user_id = u.id AS "owner"
+
+          FROM tablejoin t
+          LEFT JOIN shares s
+          ON t.id = s.shared_id
+          JOIN users u
+          ON t.user_id = u.id
+          WHERE t.user_id = $1 OR t.sharer_id = $1
+          ORDER BY date DESC;
+        `,
         [id]
       );
 
@@ -135,7 +179,6 @@ export async function getPosts(req, res) {
 
     for (let i = 0; i < posts.length; i++) {
       const e = posts[i];
-      e.owner = e.user_id === userId;
       if (e.link) {
         const { title, description, url, images, favicons } =
           await getLinkPreview(e.link);
