@@ -129,6 +129,7 @@ export async function getPosts(req, res) {
     }
 
     data.posts = posts;
+    console.log(posts)
     res.send(data);
   } catch (err) {
     console.log(err.message);
@@ -273,4 +274,63 @@ export async function postComment(req, res) {
     res.sendStatus(500)
   }
 
+}
+
+export async function getComment(req, res) {
+  const { postId } = req.body
+  let queryComments
+  let data = {}
+  
+  try{
+    if(postId){
+      queryComments = await connection.query(`
+      SELECT 
+        c.user_id, u.name, u.image_url, c.message
+      FROM  
+        comments AS c
+      JOIN
+        users AS u ON c.user_id = u.id
+      WHERE
+        c.post_id = $1
+      ORDER BY
+        c.id DESC;
+      `, [postId])
+
+      const queryUser = await connection.query(`
+        SELECT user_id FROM posts WHERE posts.id = $1;
+      `, [postId])
+
+      const userId = queryUser.rows[0].user_id      
+
+      const queryFollowing = await connection.query(`
+        SELECT 
+          f.following_id 
+        FROM 
+          followings AS f
+        WHERE
+          f.user_id = $1;
+      `, [userId]) 
+      
+       data.followings = queryFollowing.rows.map( f => f.following_id)
+       data.userId = userId
+
+    }else{
+      queryComments = await connection.query(`
+      SELECT 
+        post_id AS postId, 
+        COUNT(post_id) AS countComment
+      FROM
+        comments
+      GROUP BY
+        post_id;
+      `)
+    }
+
+    data.comments = queryComments.rows
+    
+    res.send(data)
+  } catch(error){
+    console.log(error.message)
+    res.sendStatus(500)
+  }
 }

@@ -1,5 +1,13 @@
 import { Router } from "express";
-import { createPost, deletePost, getPosts, updatePost, likePost, getPostLikes, postComment } from "../controllers/posts.controllers.js";
+import { 
+    createPost, 
+    deletePost, 
+    getPosts, 
+    updatePost, 
+    likePost, 
+    getPostLikes, 
+    postComment, 
+    getComment } from "../controllers/posts.controllers.js";
 import { validateSchema } from "../middlewares/schemaValidation.middleware.js";
 import { tokenValidation } from "../middlewares/token.middleware.js";
 import commentSchema from "../models/comments.model.js";
@@ -15,5 +23,6 @@ router.delete("/posts/:id", tokenValidation, deletePost);
 router.post("/likes", tokenValidation, likePost);
 router.get("/likes", getPostLikes);
 router.post("/comments", tokenValidation, validateSchema(commentSchema), postComment)
+router.get("/comments", getComment)
 
 export default router;
