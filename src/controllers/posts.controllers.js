@@ -62,54 +62,86 @@ export async function getPosts(req, res) {
     if (id) {
       queryPosts = await connection.query(
         `
-          WITH tablejoin AS (
-            SELECT
-              p.id,
-            p.user_id,
-            P.message,
-            p.link,
-              r.user_id AS sharer_id,
-            p.date,
-              r.date AS repost_date,
-            u.name AS sharer_name
-            FROM posts p
-            LEFT JOIN reposts r
-            ON p.id = r.post_id
-            LEFT JOIN users u 
-			      ON r.user_id = u.id
-            )
-          , 
-          shares AS (
-            SELECT 
-            r.post_id AS shared_id,
-            COUNT(r.post_id) AS share_count
-            FROM posts p
-            JOIN reposts r
-            ON p.id = r.post_id
-            GROUP BY r.post_id
-            )
-
+        /* temp table containing all shared posts */
+        WITH
+        shares_info AS (
           SELECT 
-            t.id, t.user_id, u.image_url, u.name, t.message, t.link,
-            json_build_object(
-              'sharerId', CASE WHEN t.user_id = $1
-                  THEN NULL ELSE t.sharer_id END,
-              'sharerName', t.sharer_name,
-              'shareCount', s.share_count
-            ) AS "shareInfo",
-            CASE WHEN t.repost_date IS NOT NULL
-                THEN t.repost_date
-                ELSE t.date 
-            END AS date,
-            t.user_id = $1 AS "owner"
-
-          FROM tablejoin t
-          LEFT JOIN shares s
-          ON t.id = s.shared_id
+            p.id,
+            p.user_id,
+            u.image_url,
+            us.name,
+            p.link,
+            p.message,
+            r.date,
+            p.user_id = $1 AS owner,
+            u.name AS sharer_name,
+            r.user_id AS sharer_id
+          FROM posts p
+          JOIN reposts r
+          ON p.id = r.post_id
           JOIN users u
-          ON t.user_id = u.id
-          WHERE t.user_id = $1 OR t.sharer_id = $1
-          ORDER BY date DESC;
+          ON r.user_id = u.id
+          JOIN users us
+	        ON p.user_id = us.id
+          WHERE r.user_id = $1
+        ),
+
+        /* count how many times posts from the
+        shares_info appeared */
+        shares_counter AS (
+          SELECT s.id, COUNT(s.id)
+          FROM shares_info s
+          GROUP BY s.id
+        ),
+
+        /* join the temp shares_info table
+        and the shares_counter table */
+        shares AS (
+          SELECT 
+            s.id, s.user_id, s.image_url, s.name, s.link, s.message, s.date, s.owner,
+            JSONB_BUILD_OBJECT(
+              'sharerId', s.sharer_id,
+              'sharerName', s.sharer_name,
+              'shareCount', COALESCE(c.count,0)
+            ) AS shareInfo
+          FROM shares_info s
+          LEFT JOIN shares_counter c
+          ON s.id = c.id
+        ),
+
+        /* create a similar table with the original posts
+        and adds the columns (shareInfo) needed for the later union */
+        original_posts AS (
+          SELECT 
+            p.id,
+            p.user_id,
+            u.image_url,
+            u.name,
+            p.link,
+            p.message,
+            p.date,
+            p.user_id = $1 AS owner,
+            JSONB_BUILD_OBJECT(
+                'sharerId', NULL,
+                'sharerName', NULL,
+                'shareCount', COALESCE(c.count,0)
+              ) AS shareInfo
+          FROM posts p
+          JOIN users u
+          ON p.user_id = u.id
+          LEFT JOIN shares_counter c
+          ON p.id = c.id
+          WHERE p.user_id = $1          
+        )
+
+        SELECT s.* 
+        FROM shares s 
+        UNION
+        SELECT p.* 
+        FROM original_posts p
+        ORDER BY date DESC
+        OFFSET null
+        LIMIT null;
         `,
         [id]
       );
@@ -130,110 +162,174 @@ export async function getPosts(req, res) {
     } else if (hashtag) {
       queryPosts = await connection.query(
         `
-        WITH tablejoin AS (
-          SELECT
-          p.id,
-          p.user_id,
-          P.message,
-          p.link,
-            r.user_id AS sharer_id,
-          p.date,
-            r.date AS repost_date,
-			    u,name AS sharer_name
-          FROM posts p
-          LEFT JOIN reposts r
-          ON p.id = r.post_id
-          LEFT JOIN users u
-          ON r.user_id = u.id
-          )
-        ,
-        shares AS (
+        /* temp table containing all shared posts */
+        WITH
+        shares_info AS (
           SELECT 
-          r.post_id AS shared_id,
-          COUNT(r.post_id) AS share_count
+            p.id,
+            p.user_id,
+            u.image_url,
+            us.name,
+            p.link,
+            p.message,
+            r.date,
+            p.user_id = $1 AS owner,
+            u.name AS sharer_name,
+            r.user_id AS sharer_id
           FROM posts p
           JOIN reposts r
           ON p.id = r.post_id
-          GROUP BY r.post_id
-          )
-
-        SELECT 
-          t.id, t.user_id, u.image_url, u.name, t.message, t.link,
-          json_build_object(
-            'sharerId', NULL,
-            'shareCount', COALESCE(s.share_count,0),
-            'sharerName', NULL
-          ) AS "shareInfo",
-          CASE WHEN t.repost_date IS NOT NULL
-              THEN t.repost_date
-              ELSE t.date 
-          END AS date,
-          t.user_id = $2 AS "owner"
-
-          FROM tablejoin t
-          LEFT JOIN shares s
-          ON t.id = s.shared_id
           JOIN users u
-          ON t.user_id = u.id
-		      WHERE t.id IN (SELECT h.post_id FROM hashtags h WHERE h.name = $1)
-          ORDER BY date DESC;
+          ON r.user_id = u.id
+          JOIN users us
+          ON p.user_id = us.id
+        ),
+
+        /* count how many times posts from the
+        shares_info appeared */
+        shares_counter AS (
+          SELECT s.id, COUNT(s.id)
+          FROM shares_info s
+          GROUP BY s.id
+        ),
+
+        /* join the temp shares_info table
+        and the shares_counter table */
+        shares AS (
+        SELECT 
+          s.id, s.user_id, s.image_url, s.name, s.link, s.message, s.date, s.owner,
+          JSONB_BUILD_OBJECT(
+            'sharerId', s.sharer_id,
+            'sharerName', s.sharer_name,
+            'shareCount', COALESCE(c.count,0)
+          ) AS shareInfo
+        FROM shares_info s
+        LEFT JOIN shares_counter c
+        ON s.id = c.id
+        ),
+
+        /* create a similar table with the original posts
+        and adds the columns (shareInfo) needed for the later union */
+        original_posts AS (
+          SELECT 
+          p.id,
+          p.user_id,
+          u.image_url,
+          u.name,
+          p.link,
+          p.message,
+          p.date,
+          p.user_id = $1 AS owner,
+          JSONB_BUILD_OBJECT(
+            'sharerId', NULL,
+            'sharerName', NULL,
+            'shareCount', COALESCE(c.count,0)
+            ) AS shareInfo
+          FROM posts p
+          JOIN users u
+          ON p.user_id = u.id
+          LEFT JOIN shares_counter c
+          ON p.id = c.id
+        )
+
+        SELECT s.* 
+        FROM shares s
+        WHERE id IN (SELECT h.post_id FROM hashtags h WHERE h.name = $2)
+        UNION
+        SELECT p.* 
+        FROM original_posts p
+        WHERE id IN (SELECT h.post_id FROM hashtags h WHERE h.name = $2)
+        ORDER BY date DESC
+        OFFSET null
+        LIMIT null;
       
       `,
-        [hashtag, userInfo.user_id]
+        [userInfo.user_id, hashtag]
       );
     } else {
       queryPosts = await connection.query(
         `
-        WITH tablejoin AS (
-          SELECT
-          p.id,
-          p.user_id,
-          P.message,
-          p.link,
-            r.user_id AS sharer_id,
-          p.date,
-            r.date AS repost_date,
-          u,name AS sharer_name
-          FROM posts p
-          LEFT JOIN reposts r
-          ON p.id = r.post_id
-          LEFT JOIN users u
-          ON r.user_id = u.id
-        )
-        , 
-        shares AS (
+        /* temp table containing all shared posts */
+        WITH
+        shares_info AS (
           SELECT 
-          r.post_id AS shared_id,
-          COUNT(r.post_id) AS share_count
+            p.id,
+            p.user_id,
+            u.image_url,
+            us.name,
+            p.link,
+            p.message,
+            r.date,
+            p.user_id = $1 AS owner,
+            u.name AS sharer_name,
+            r.user_id AS sharer_id
           FROM posts p
           JOIN reposts r
           ON p.id = r.post_id
-          GROUP BY r.post_id
-          )
+          JOIN users u
+          ON r.user_id = u.id
+          JOIN users us
+	        ON p.user_id = us.id
+        ),
 
-        SELECT 
-          t.id, t.user_id, u.image_url, u.name, t.message, t.link,
-          json_build_object(
-            'sharerId', t.sharer_id,
-            'shareCount', COALESCE(s.share_count,0),
-            'sharerName', t.sharer_name
-          ) AS "shareInfo",
-          CASE WHEN t.repost_date IS NOT NULL
-              THEN t.repost_date
-              ELSE t.date 
-          END AS date,
-          t.user_id = $1 AS "owner"
-        
-        FROM tablejoin t
-        LEFT JOIN shares s
-        ON t.id = s.shared_id
-        JOIN users u
-        ON t.user_id = u.id
-        WHERE t.user_id IN (
-          SELECT following_id FROM followings WHERE user_id = $1)
-        OR t.sharer_id IN (
-          SELECT following_id FROM followings WHERE user_id = $1)
-        ORDER BY date DESC;
+        /* count how many times posts from the
+        shares_info appeared */
+        shares_counter AS (
+          SELECT s.id, COUNT(s.id)
+          FROM shares_info s
+          GROUP BY s.id
+        ),
+
+        /* join the temp shares_info table
+        and the shares_counter table */
+        shares AS (
+          SELECT 
+            s.id, s.user_id, s.image_url, s.name, s.link, s.message, s.date, s.owner,
+            JSONB_BUILD_OBJECT(
+              'sharerId', s.sharer_id,
+              'sharerName', s.sharer_name,
+              'shareCount', COALESCE(c.count,0)
+            ) AS shareInfo
+          FROM shares_info s
+          LEFT JOIN shares_counter c
+          ON s.id = c.id
+        ),
+
+        /* create a similar table with the original posts
+        and adds the columns (shareInfo) needed for the later union */
+        original_posts AS (
+          SELECT 
+            p.id,
+            p.user_id,
+            u.image_url,
+            u.name,
+            p.link,
+            p.message,
+            p.date,
+            p.user_id = $1 AS owner,
+            JSONB_BUILD_OBJECT(
+                'sharerId', NULL,
+                'sharerName', NULL,
+                'shareCount', COALESCE(c.count,0)
+              ) AS shareInfo
+          FROM posts p
+          JOIN users u
+          ON p.user_id = u.id
+          LEFT JOIN shares_counter c
+          ON p.id = c.id
+          
+        )
+
+        SELECT s.* 
+        FROM shares s
+        WHERE user_id IN (SELECT following_id FROM followings WHERE user_id = $1)
+        UNION
+        SELECT p.* 
+        FROM original_posts p
+        WHERE user_id IN (SELECT following_id FROM followings WHERE user_id = $1)
+        ORDER BY date DESC
+        OFFSET null
+        LIMIT null;
   `,
         [userId]
       );
@@ -263,7 +359,6 @@ export async function getPosts(req, res) {
     }
 
     data.posts = posts;
-    console.log(posts)
     res.send(data);
   } catch (err) {
     console.log(err.message);
@@ -442,13 +537,14 @@ export async function postComment(req, res) {
 }
 
 export async function getComment(req, res) {
-  const { postId } = req.body
-  let queryComments
-  let data = {}
-  
-  try{
-    if(postId){
-      queryComments = await connection.query(`
+  const { postId } = req.body;
+  let queryComments;
+  let data = {};
+
+  try {
+    if (postId) {
+      queryComments = await connection.query(
+        `
       SELECT 
         c.user_id, u.name, u.image_url, c.message
       FROM  
@@ -459,27 +555,34 @@ export async function getComment(req, res) {
         c.post_id = $1
       ORDER BY
         c.id DESC;
-      `, [postId])
+      `,
+        [postId]
+      );
 
-      const queryUser = await connection.query(`
+      const queryUser = await connection.query(
+        `
         SELECT user_id FROM posts WHERE posts.id = $1;
-      `, [postId])
+      `,
+        [postId]
+      );
 
-      const userId = queryUser.rows[0].user_id      
+      const userId = queryUser.rows[0].user_id;
 
-      const queryFollowing = await connection.query(`
+      const queryFollowing = await connection.query(
+        `
         SELECT 
           f.following_id 
         FROM 
           followings AS f
         WHERE
           f.user_id = $1;
-      `, [userId]) 
-      
-       data.followings = queryFollowing.rows.map( f => f.following_id)
-       data.userId = userId
+      `,
+        [userId]
+      );
 
-    }else{
+      data.followings = queryFollowing.rows.map((f) => f.following_id);
+      data.userId = userId;
+    } else {
       queryComments = await connection.query(`
       SELECT 
         post_id AS postId, 
@@ -488,14 +591,14 @@ export async function getComment(req, res) {
         comments
       GROUP BY
         post_id;
-      `)
+      `);
     }
 
-    data.comments = queryComments.rows
-    
-    res.send(data)
-  } catch(error){
-    console.log(error.message)
-    res.sendStatus(500)
+    data.comments = queryComments.rows;
+
+    res.send(data);
+  } catch (error) {
+    console.log(error.message);
+    res.sendStatus(500);
   }
 }
