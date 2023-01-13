@@ -71,7 +71,7 @@ export async function getPosts(req, res) {
           SELECT 
             p.id,
             p.user_id,
-            u.image_url,
+            us.image_url,
             us.name,
             p.link,
             p.message,
@@ -165,50 +165,13 @@ export async function getPosts(req, res) {
     } else if (hashtag) {
       queryPosts = await connection.query(
         `
-        /* temp table containing all shared posts */
-        WITH
-        shares_info AS (
-          SELECT 
-            p.id,
-            p.user_id,
-            u.image_url,
-            us.name,
-            p.link,
-            p.message,
-            r.date,
-            p.user_id = $1 AS owner,
-            u.name AS sharer_name,
-            r.user_id AS sharer_id
-          FROM posts p
-          JOIN reposts r
-          ON p.id = r.post_id
-          JOIN users u
-          ON r.user_id = u.id
-          JOIN users us
-          ON p.user_id = us.id
-        ),
-
         /* count how many times posts from the
         shares_info appeared */
-        shares_counter AS (
-          SELECT s.id, COUNT(s.id)
-          FROM shares_info s
-          GROUP BY s.id
-        ),
-
-        /* join the temp shares_info table
-        and the shares_counter table */
-        shares AS (
-        SELECT 
-          s.id, s.user_id, s.image_url, s.name, s.link, s.message, s.date, s.owner,
-          JSONB_BUILD_OBJECT(
-            'sharerId', s.sharer_id,
-            'sharerName', s.sharer_name,
-            'shareCount', COALESCE(c.count,0)
-          ) AS shareInfo
-        FROM shares_info s
-        LEFT JOIN shares_counter c
-        ON s.id = c.id
+        WITH
+		    shares_counter AS (
+          SELECT r.post_id AS id, COUNT(r.post_id)
+          FROM reposts r
+          GROUP BY r.post_id
         ),
 
         /* create a similar table with the original posts
@@ -235,10 +198,6 @@ export async function getPosts(req, res) {
           ON p.id = c.id
         )
 
-        SELECT s.* 
-        FROM shares s
-        WHERE id IN (SELECT h.post_id FROM hashtags h WHERE h.name = $2)
-        UNION
         SELECT p.* 
         FROM original_posts p
         WHERE id IN (SELECT h.post_id FROM hashtags h WHERE h.name = $2)
@@ -258,7 +217,7 @@ export async function getPosts(req, res) {
           SELECT 
             p.id,
             p.user_id,
-            u.image_url,
+            us.image_url,
             us.name,
             p.link,
             p.message,
@@ -325,7 +284,7 @@ export async function getPosts(req, res) {
 
         SELECT s.* 
         FROM shares s
-        WHERE user_id IN (SELECT following_id FROM followings WHERE user_id = $1)
+        WHERE shareInfo->>'sharerId'::text IN (SELECT following_id::text FROM followings WHERE user_id = $1)
         UNION
         SELECT p.* 
         FROM original_posts p
