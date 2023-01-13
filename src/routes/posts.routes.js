@@ -26,6 +26,7 @@ router.post("/likes", tokenValidation, likePost);
 router.get("/likes", getPostLikes);
 router.post("/comments", tokenValidation, validateSchema(commentSchema), postComment);
 router.get("/comments", getComment);
+router.get("/comments/:postId", getComment);
 router.post("/share/:id", tokenValidation, repost);
 
 export default router;
