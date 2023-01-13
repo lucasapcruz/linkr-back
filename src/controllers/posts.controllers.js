@@ -467,29 +467,20 @@ export async function postComment(req, res) {
   const { postId, message } = res.locals.data;
 
   try {
-    const query = await connection.query(
-      `
+    const query = await connection.query(`
       SELECT s.user_id
       FROM sessions AS s
       WHERE s.token = $1;
-    `,
-      [token]
-    );
-
-    console.log(query);
-
+    `, [token]);
     const userId = query.rows[0].user_id;
 
-    await connection.query(
-      `
+    await connection.query(`
       INSERT 
       INTO comments
         (post_id, user_id, message)
       VALUES
         ($1, $2, $3);  
-    `,
-      [postId, userId, message]
-    );
+    `, [postId, userId, message]);
 
     res.sendStatus(201);
   } catch (error) {
@@ -499,7 +490,7 @@ export async function postComment(req, res) {
 }
 
 export async function getComment(req, res) {
-  const { postId } = req.body;
+  const { postId } = req.params;
   let queryComments;
   let data = {};
 
@@ -516,7 +507,7 @@ export async function getComment(req, res) {
       WHERE
         c.post_id = $1
       ORDER BY
-        c.id DESC;
+        c.date;
       `,
         [postId]
       );
@@ -545,6 +536,7 @@ export async function getComment(req, res) {
       data.followings = queryFollowing.rows.map((f) => f.following_id);
       data.userId = userId;
     } else {
+
       queryComments = await connection.query(`
       SELECT 
         post_id AS postId, 
