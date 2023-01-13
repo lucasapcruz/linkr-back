@@ -68,7 +68,7 @@ export async function getPosts(req, res) {
           SELECT 
             p.id,
             p.user_id,
-            u.image_url,
+            us.image_url,
             us.name,
             p.link,
             p.message,
@@ -168,7 +168,7 @@ export async function getPosts(req, res) {
           SELECT 
             p.id,
             p.user_id,
-            u.image_url,
+            us.image_url,
             us.name,
             p.link,
             p.message,
@@ -255,7 +255,7 @@ export async function getPosts(req, res) {
           SELECT 
             p.id,
             p.user_id,
-            u.image_url,
+            us.image_url,
             us.name,
             p.link,
             p.message,
@@ -322,7 +322,7 @@ export async function getPosts(req, res) {
 
         SELECT s.* 
         FROM shares s
-        WHERE user_id IN (SELECT following_id FROM followings WHERE user_id = $1)
+        WHERE shareInfo->>'sharerId'::text IN (SELECT following_id::text FROM followings WHERE user_id = $1)
         UNION
         SELECT p.* 
         FROM original_posts p
