@@ -51,7 +51,10 @@ export async function createPost(req, res) {
 export async function getPosts(req, res) {
   const { userInfo } = res.locals;
   const { hashtag } = req.query;
+  const { page } = req.query;
   const { id } = req.params;
+
+  const offset = (page-1)*10
 
   try {
     const userId = userInfo.user_id;
@@ -140,10 +143,10 @@ export async function getPosts(req, res) {
         SELECT p.* 
         FROM original_posts p
         ORDER BY date DESC
-        OFFSET null
-        LIMIT null;
+        OFFSET $2
+        LIMIT 10;
         `,
-        [id]
+        [id, offset]
       );
 
       const queryFollowing = await connection.query(
@@ -240,11 +243,11 @@ export async function getPosts(req, res) {
         FROM original_posts p
         WHERE id IN (SELECT h.post_id FROM hashtags h WHERE h.name = $2)
         ORDER BY date DESC
-        OFFSET null
-        LIMIT null;
+        OFFSET $3
+        LIMIT 10;
       
       `,
-        [userInfo.user_id, hashtag]
+        [userInfo.user_id, hashtag, offset]
       );
     } else {
       queryPosts = await connection.query(
@@ -328,10 +331,10 @@ export async function getPosts(req, res) {
         FROM original_posts p
         WHERE user_id IN (SELECT following_id FROM followings WHERE user_id = $1)
         ORDER BY date DESC
-        OFFSET null
-        LIMIT null;
+        OFFSET $2
+        LIMIT 10;
   `,
-        [userId]
+        [userId, offset]
       );
 
       const followQuery = await connection.query(
